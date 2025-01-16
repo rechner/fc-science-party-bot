@@ -1,0 +1,6 @@
+*.session
+.envrc
+__pycache__/
+.idea/
+venv/
+static/img/*

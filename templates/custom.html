@@ -1,0 +1,139 @@
+{% extends 'main.html' %}
+
+{% block title %}Checkin{% endblock %}
+
+{% block body %}
+{% if user %}
+  {% set full_name = user.first_name + " " + user.last_name %}
+{% else %}
+  {% set user = None %}
+{% endif %}
+
+<div class="container bg-light-subtle p-lg-5 border border-5 border-dark " style="margin-top: 5%"  >
+  <h1>Animal Testing Enrolment</h1>
+  <img src="{{ url_for('static', filename='resources/img/bar-yellow.gif') }}" width="100%">
+  <div class="row mt-lg-3">
+    <div class="col-3">
+      <img src="{{ photo or user.photo }}" class="thumbnail">
+
+    </div>
+    <div class="col-9">
+      <form action="{{ url_for('enrol_user') }}" method="post" id="theform">
+        <input type="hidden" name="id" value="{{ user.id }}">
+
+        <div class="row">
+          <div class="col">
+            <label class="visually-hidden" for="name">Name</label>
+            <input class="form-control form-control-lg" type="text" name="name" id="name" value="{{ full_name }}" placeholder="Name" required="required">
+          </div>
+          <div class="col">
+            <div class="input-group mb-3" id="handle_group">
+              <label class="visually-hidden" for="handle">Handle</label>
+              <span class="input-group-text" id="basic-addon1">@</span>
+              <input class="form-control form-control-lg" type="text" name="handle" id="handle" value="{{ user.username }}" placeholder="Handle">
+            </div>
+          </div>
+        </div>
+        <div class="row">
+
+        </div>
+        <div class="row align-items-center">
+          <label for="pronouns" class="sr-only">Pronouns</label>
+          <div class="col-6">
+            <input class="form-control form-control-lg" type="text" name="pronouns" id="pronouns" placeholder="Pronouns">
+          </div>
+          <div class="col-2">
+            <div class="d-grid gap-2">
+              <button type="button" id="heHim" class="btn btn-lg btn-secondary btn-block pronoun-btn">he/him</button>
+            </div>
+          </div>
+          <div class="col-2">
+            <div class="d-grid gap-2">
+              <button type="button" id="sheHer" class="btn btn-lg btn-secondary btn-block pronoun-btn">she/her</button>
+            </div>
+          </div>
+          <div class="col-2">
+            <div class="d-grid gap-2">
+              <button type="button" id="theyThem" class="btn btn-lg btn-secondary btn-block pronoun-btn">they/them</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mb-2 mt-3">
+          <div class="col-sm">
+            <label for="age">Age</label>
+            <input class="form-control form-control-lg bg-danger" type="tel" name="age" id="age" required="required" placeholder="Scan ID">
+          </div>
+        </div>
+
+        <div class="row row-gap-lg-2">
+          <div class="col-6 gap-2">
+            <div class="d-grid gap-2">
+            <button type="submit" id="submit-btn" class="btn btn-success btn-lg">
+              Print Wristband
+            </button>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="d-grid gap-2">
+            <button id="cancel-btn" type="button" class="btn btn-danger btn-lg">
+              Cancel
+            </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2>Privacy notice</h2>
+    <p>
+      Subject to 18 U.S.C. chapter 123, §2721 and the Drivers' Privacy Protection Act of 1994, information from the
+      machine-readable zone of an ID card is used solely for the purpose of validating the cardholder's age, and is
+      immediately discarded after this form is submitted.  Retained information includes
+    </p>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/client-connection.js') }}"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", (event) => {
+
+        const cancel_btn = document.getElementById("cancel-btn")
+        cancel_btn.addEventListener("click", () => {
+            document.location = "{{ url_for('index') }}";
+        });
+
+        for (let elementsByClassNameElement of document.getElementsByClassName('pronoun-btn')) {
+            elementsByClassNameElement.addEventListener('click', (evt) => {
+                let buttonPronoun = evt?.target?.textContent;
+
+                console.log(buttonPronoun)
+                if (buttonPronoun) {
+                    document.getElementById('pronouns').value = buttonPronoun;
+                }
+            })
+        }
+
+        document.getElementById("age").addEventListener("input", (event) => {
+            const age_element = document.getElementById("age");
+            let age = parseInt(age_element.value);
+            if (Number.isNaN(age)) {
+                return;
+            }
+
+            if (age < 18) {
+                age_element.classList.remove('bg-warn', 'bg-danger', 'bg-success');
+                age_element.classList.add('bg-danger');
+            } else if ((age >= 18) && (age < 21)) {
+                age_element.classList.remove('bg-danger', 'bg-success');
+                age_element.classList.add('bg-warning');
+            } else if (age >= 21) {
+                age_element.classList.remove('bg-danger');
+                age_element.classList.add('bg-success');
+            }
+        });
+    });
+</script>
+{% endblock %}

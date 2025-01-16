@@ -1,0 +1,30 @@
+
+img.emoji {
+   height: 1em;
+   width: 1em;
+   margin: 0 .05em 0 .1em;
+   vertical-align: -0.1em;
+}
+
+.rowspace {
+   margin: 10px;
+   height: 65px;
+}
+
+.rowspace button {
+    height: 50px;
+    font-size: 1.5em;
+}
+
+.thumbnail {
+    height: 210px;
+    width: 210px;
+}
+
+.spinner-img {
+    position: absolute;
+    left: 105px;
+    top: 95px;
+    z-index: -1;
+}
+

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <script src="{{ url_for('static', filename='js/bootstrap.bundle.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/mqtt.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/twemoji.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <title>{% block title %}{% endblock %}</title>
+  {% block head %}{% endblock %}
+</head>
+<body style='background-image: url("{{ url_for('static', filename='resources/img/molecule.gif') }}"); background-repeat: repeat'>
+  {% block body %}{% endblock %}
+</body>
+</html>

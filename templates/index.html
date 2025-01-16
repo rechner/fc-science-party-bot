@@ -1,0 +1,25 @@
+{% extends 'main.html' %}
+
+{% block title %}Start{% endblock %}
+
+{% block body %}
+<div class="container bg-light-subtle p-lg-5 border border-5 border-dark " style="margin-top: 10%">
+  <div class="row">
+    <div class="col">
+    <h1 class="col">Welcome!</h1>
+
+
+  <h2>Scan Your Telegram QR code to begin</h2>
+
+  <a href="{{ url_for('custom') }}" class="btn btn-lg btn-primary">Custom Enrollment</a>
+  <a href="#" class="btn btn-lg btn-success">Check-in</a>
+  <a href="#" class="btn btn-lg btn-dark">Check-out</a>
+
+  <script src="{{ url_for('static', filename='js/client-connection.js') }}"></script>
+      </div>
+  <div class="col">
+    <img class="col img-fluid w-50 " src="static/resources/img/clipart_sciencemedicine_022.gif">
+  </div>
+     </div>
+</div>
+{% endblock %}

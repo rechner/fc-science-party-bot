@@ -1,0 +1,10 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:1.6.15
+    restart: unless-stopped
+    ports:
+      - "1883:1883" # MQTT
+      #- "8883:8883" # MQTT TLS
+      - "8083:8083" # websocket
+    volumes:
+      - ./mosquitto:/mosquitto/
