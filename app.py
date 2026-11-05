@@ -11,7 +11,7 @@ api_id = os.environ['TELEGRAM_API_ID']
 api_hash = os.environ['TELEGRAM_API_HASH']
 
 app = Quart(__name__)
-app.secret_key = os.environ['QUART_SECERT_KEY']
+app.secret_key = os.environ['QUART_SECRET_KEY']
 
 """
 Can't look up users by phone number as a bot, so if the QR code has /+ in it, show an error to tell them to set a

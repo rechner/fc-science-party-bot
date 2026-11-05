@@ -8,7 +8,7 @@ function get_telegram_username(message) {
 
 document.addEventListener("DOMContentLoaded", (event) => {
 
-    const client = mqtt.connect("mqtt://localhost:8883");
+    const client = mqtt.connect("mqtt://localhost:8083");
 
     client.on("connect", () => {
         client.subscribe("checkin/presence", (err) => {
@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
         }
 
         if (topic === "checkin/scan") {
-            if (payload.data_type === "generic") {
+            if (payload.data_type === "url") {
                 let username = get_telegram_username(payload);
                 if (username) {
                     window.location = "/telegram/" + username;

@@ -16,8 +16,12 @@ def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None,
     icon_zpl = ""
     if icon is not None:
         if type(icon) is str:
-            with open(icon, 'rb') as image:
-                icon_bytes = image.read()
+            try:
+                with open(icon, 'rb') as image:
+                    icon_bytes = image.read()
+            except FileNotFoundError:
+                with open('static/img/nobody.jpg', 'rb') as image:
+                    icon_bytes = image.read()
         elif isinstance(icon, io.IOBase):
             icon_bytes = icon.read()
         elif type(icon) is bytes:
@@ -40,7 +44,7 @@ def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None,
     if age is not None:
         if age >= 18:
             over_18 = True
-        elif age >= 21:
+        if age >= 21:
             over_21 = True
 
     payload = {

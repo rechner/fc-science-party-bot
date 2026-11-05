@@ -3,7 +3,7 @@
 ^FX Set label home: (x, y)
 ^FWR
 ^POI
-^LH100,200
+^LH0,200
 
 ^FX BO Aztec code parameters:
 ^FX - orientation (N/R/I/B)

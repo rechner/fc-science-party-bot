@@ -4,7 +4,6 @@
 
 {% block body %}
 {% if user %}
-  {% set full_name = user.first_name + " " + user.last_name %}
 {% else %}
   {% set user = None %}
 {% endif %}
@@ -24,7 +23,7 @@
         <div class="row">
           <div class="col">
             <label class="visually-hidden" for="name">Name</label>
-            <input class="form-control form-control-lg" type="text" name="name" id="name" value="{{ full_name }}" placeholder="Name" required="required">
+	    <input class="form-control form-control-lg" type="text" name="name" id="name" value="{{ user.first_name }} {{user.last_name}}" placeholder="Name" required="required">
           </div>
           <div class="col">
             <div class="input-group mb-3" id="handle_group">
