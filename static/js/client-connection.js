@@ -6,6 +6,21 @@ function get_telegram_username(message) {
     return null;
 }
 
+// Source - https://stackoverflow.com/a/38552302
+// Posted by Peheje, modified by community. See post 'Timeline' for change history
+// Retrieved 2026-11-06, License - CC BY-SA 4.0
+
+function parseJwt (token) {
+    var base64Url = token.split('.')[1];
+    var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+
+    return JSON.parse(jsonPayload);
+}
+
+
 document.addEventListener("DOMContentLoaded", (event) => {
 
     const client = mqtt.connect("mqtt://localhost:8083");
@@ -47,7 +62,15 @@ document.addEventListener("DOMContentLoaded", (event) => {
                         age_element.classList.add('bg-success');
                     }
                 }
+            } else if (payload.data_type == "text") {
+                let jwt_text = payload.text;
+                try { 
+                    let parsed_jwt = parseJwt(jwt_text);
+                    window.location = "/jwt?token=" + jwt_text;
+                } catch {
+                }
             }
+
         }
         console.log(message.toString());
     });
