@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
                     }
                 }
             } else if (payload.data_type == "text") {
-                let jwt_text = payload.text;
+                let jwt_text = payload.data;
                 try { 
                     let parsed_jwt = parseJwt(jwt_text);
                     window.location = "/jwt?token=" + jwt_text;

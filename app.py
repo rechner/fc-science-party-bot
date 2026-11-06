@@ -1,11 +1,14 @@
 import asyncio
 import os
+from datetime import datetime
 
 from quart import Quart, render_template, url_for, request, redirect
 from telethon import TelegramClient, events
 from telethon.tl.functions.users import GetFullUserRequest
 
-from wristband import render as render_wristband
+import jwt
+
+from wristband import render as render_wristband, decode_jwt
 
 api_id = os.environ['TELEGRAM_API_ID']
 api_hash = os.environ['TELEGRAM_API_HASH']
@@ -110,6 +113,39 @@ async def print_wristband(username):
         "last_name": user.last_name,
         "bio": full.full_user.about,
     }}
+
+
+@app.route("/jwt", methods=['GET', 'POST'])
+async def validate_jwt():
+    """
+    Validate a JWT issued on a wristband.
+
+    Accepts the token as:
+      - GET  /jwt?token=<jwt>
+      - POST /jwt with JSON {"token": "<jwt>"} or form field "token"
+
+    Renders jwt.html with the validation status: 200 when the signature is
+    valid, 400 when no token is supplied, and 401 when the token is invalid.
+    """
+    token = request.args.get("token")
+    if token is None and request.method == "POST":
+        if request.is_json:
+            body = await request.get_json(silent=True) or {}
+            token = body.get("token") if isinstance(body, dict) else None
+        else:
+            token = (await request.form).get("token")
+
+    if not token or not isinstance(token, str):
+        return await render_template("jwt.html", status="missing"), 400
+
+    try:
+        claims = decode_jwt(token.strip())
+    except jwt.InvalidTokenError:
+        # Don't echo decoder details back to the caller.
+        return await render_template("jwt.html", status="invalid"), 401
+
+    issued_at = datetime.fromtimestamp(claims["iat"]).strftime("%Y-%m-%d %H:%M")
+    return await render_template("jwt.html", status="valid", claims=claims, issued_at=issued_at)
 
 
 @app.route("/")

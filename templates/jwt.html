@@ -1,0 +1,57 @@
+{% extends 'main.html' %}
+
+{% block title %}Wristband Check{% endblock %}
+
+{% block body %}
+<div class="container bg-light-subtle p-lg-5 border border-5 border-dark" style="margin-top: 10%">
+  <h1>Wristband Check</h1>
+
+  {% if status == "valid" %}
+  <div class="alert alert-success" role="status">
+    <h2 class="alert-heading">Valid wristband</h2>
+    <p class="mb-0">The signature checks out. This wristband was issued by us.</p>
+  </div>
+
+  <dl class="row fs-4">
+    <dt class="col-sm-3">Name</dt>
+    <dd class="col-sm-9">{{ claims.get("name", "") }}</dd>
+
+    <dt class="col-sm-3">ID</dt>
+    <dd class="col-sm-9">{{ claims["sub"] }}</dd>
+
+    <dt class="col-sm-3">Age</dt>
+    <dd class="col-sm-9">
+      {% if claims.get("21+") %}
+      <span class="badge text-bg-success">21+</span>
+      {% elif claims.get("18+") %}
+      <span class="badge text-bg-warning">18+ (under 21, do not serve alcohol)</span>
+      {% else %}
+      <span class="badge text-bg-danger">Under 18</span>
+      {% endif %}
+    </dd>
+
+    <dt class="col-sm-3">Issued</dt>
+    <dd class="col-sm-9">{{ issued_at }}</dd>
+  </dl>
+
+  {% elif status == "invalid" %}
+  <div class="alert alert-danger" role="alert">
+    <h2 class="alert-heading">Invalid wristband</h2>
+    <p class="mb-0">This token could not be verified. It may be forged, damaged, or not one of ours.</p>
+  </div>
+
+  {% else %}
+  <div class="alert alert-secondary" role="status">
+    <h2 class="alert-heading">No token provided</h2>
+    <p class="mb-0">Scan a wristband or paste its token below.</p>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('validate_jwt') }}" class="mt-4">
+    <label for="token" class="form-label">Wristband token</label>
+    <textarea class="form-control font-monospace" id="token" name="token" rows="3" required></textarea>
+    <button type="submit" class="btn btn-lg btn-primary mt-3">Check</button>
+    <a href="{{ url_for('index') }}" class="btn btn-lg btn-dark mt-3">Back</a>
+  </form>
+</div>
+{% endblock %}

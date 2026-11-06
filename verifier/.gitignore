@@ -1,0 +1,5 @@
+node_modules/
+dist/
+dev-dist/
+# Environment-specific; export from the kiosk's signing key (see README).
+jwt-public-key.pub

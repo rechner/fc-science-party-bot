@@ -1,0 +1,4 @@
+/* Inline style attributes are blocked by the CSP, so layout tweaks live here. */
+.app-main {
+  max-width: 40rem;
+}

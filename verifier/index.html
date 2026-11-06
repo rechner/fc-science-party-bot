@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#212529">
+  <meta name="referrer" content="no-referrer">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <title>Science Party Verifier</title>
+  <script type="module" src="./src/main.js"></script>
+</head>
+<body class="bg-body-tertiary">
+  <nav class="navbar bg-dark" data-bs-theme="dark">
+    <div class="container">
+      <span class="navbar-brand mb-0 h1">Science Party Verifier</span>
+    </div>
+  </nav>
+
+  <main class="container py-3 app-main">
+    <p class="text-body-secondary">
+      Scan the PDF417 barcode on the back of a driver's license, or the Aztec code on a wristband.
+      Everything is checked on this device. Nothing is uploaded or saved.
+    </p>
+
+    <div class="d-flex gap-2 mb-3" id="controls">
+      <button type="button" class="btn btn-lg btn-primary flex-fill" id="scan-button">Scan with camera</button>
+      <label class="btn btn-lg btn-outline-secondary flex-fill mb-0" for="photo-input">From photo</label>
+      <input type="file" accept="image/*" id="photo-input" class="visually-hidden">
+    </div>
+
+    <div id="camera" class="mb-3" hidden>
+      <video id="camera-preview" class="w-100 rounded border bg-black" playsinline muted
+             aria-label="Camera preview"></video>
+      <button type="button" class="btn btn-lg btn-outline-danger w-100 mt-2" id="cancel-button">Cancel</button>
+    </div>
+
+    <section id="result" aria-live="polite"></section>
+  </main>
+</body>
+</html>

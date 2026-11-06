@@ -31,7 +31,13 @@ def decode_jwt(encoded_jwt):
     private_key = get_private_key()
     public_key = private_key.public_key()
     
-    return jwt.decode(encoded_jwt, public_key, algorithms=["EdDSA"])
+    # Pin the algorithm and require the claims every issued wristband token carries.
+    return jwt.decode(
+        encoded_jwt,
+        public_key,
+        algorithms=["EdDSA"],
+        options={"require": ["sub", "iat"]},
+    )
 
 
 def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None, icon: [str | bytes] = None, age: int = 0) -> bytes:
@@ -71,7 +77,8 @@ def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None,
             over_21 = True
 
     payload = {
-        "sub": mrn,
+        # JWT "sub" must be a string; Telegram user IDs arrive as ints.
+        "sub": str(mrn),
         "name": name,
         "18+": over_18,
         "21+": over_21,
