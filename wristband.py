@@ -4,7 +4,8 @@ import time
 from unidecode import unidecode
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, nodes
+from PIL import Image
 from zebrafy import ZebrafyImage
 import jwt
 
@@ -12,6 +13,26 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 
 env = Environment(loader=FileSystemLoader("templates"))
+
+# Where the guest photo goes when the template doesn't say (the hand-written template).
+DEFAULT_ICON_BOX = {"x": 30, "y": 210, "w": 150, "h": 150, "rotate": 0}
+
+
+def slot_box(template_name: str, name: str = "icon_zpl") -> dict:
+    """The photo box the ZPL editor writes at the top of an exported template:
+
+        {% set icon_zpl_box = {"x": 30, "y": 210, "w": 150, "h": 150, "rotate": 90} %}
+
+    x/y are relative to the template's ^LH, if it has one. rotate is 90 when the
+    label prints turned: the photo is turned clockwise before converting it.
+    Read from the parse tree, because Template.module would run the whole template
+    and fail on {% if age < 18 %} without a guest.
+    """
+    source = env.loader.get_source(env, template_name)[0]
+    for node in env.parse(source).find_all(nodes.Assign):
+        if isinstance(node.target, nodes.Name) and node.target.name == f"{name}_box":
+            return node.node.as_const()
+    return DEFAULT_ICON_BOX
 
 JWT_SECRET = os.environ['JWT_SECRET']
 
@@ -50,15 +71,22 @@ def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None,
         elif type(icon) is bytes:
             icon_bytes = icon
 
+        box = slot_box("wristband.zpl")
+        if box.get("rotate"):
+            image = Image.open(io.BytesIO(icon_bytes)).rotate(-box["rotate"], expand=True)
+            buf = io.BytesIO()
+            image.save(buf, format="PNG")
+            icon_bytes = buf.getvalue()
+
         icon_zpl = ZebrafyImage(
             icon_bytes,
             format="Z64",
             invert=True,
             dither=True,
-            width=150,
-            height=150,
-            pos_x=30,
-            pos_y=210,
+            width=box["w"],
+            height=box["h"],
+            pos_x=box["x"],
+            pos_y=box["y"],
             complete_zpl=False,
         ).to_zpl()
 
