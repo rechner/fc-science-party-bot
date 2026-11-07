@@ -20,6 +20,13 @@
       {% for message in get_flashed_messages() %}
       <div class="alert alert-warning fs-5" role="alert">{{ message }}</div>
       {% endfor %}
+      <div id="autoprint-banner" class="alert alert-success fs-4" role="status" hidden>
+        <div class="d-flex justify-content-between align-items-center gap-3">
+          <span id="autoprint-text"></span>
+          <button type="button" id="autoprint-stop" class="btn btn-lg btn-outline-dark">Stop</button>
+        </div>
+      </div>
+      <div id="scan-hint" class="alert alert-info fs-5" role="status" hidden></div>
       <form action="{{ url_for('enrol_user') }}" method="post" id="theform">
         <input type="hidden" name="id" value="{{ user.id }}">
 
@@ -85,6 +92,7 @@
           </div>
         </div>
       </form>
+      <div class="mt-3">{% include '_autoprint.html' %}</div>
     </div>
   </div>
 
@@ -100,10 +108,97 @@
 
 <script src="{{ url_for('static', filename='js/client-connection.js') }}"></script>
 <script>
+    // True only when this page came from a successful Telegram lookup.
+    const TELEGRAM_VERIFIED = {{ 'true' if telegram_verified else 'false' }};
+    // Seconds to show the auto-print countdown, so staff can Stop a wrong band.
+    const AUTO_PRINT_DELAY_S = 3;
+
     document.addEventListener("DOMContentLoaded", (event) => {
+        const form = document.getElementById("theform");
+        const age_element = document.getElementById("age");
+        const submit_btn = document.getElementById("submit-btn");
+        const banner = document.getElementById("autoprint-banner");
+        const banner_text = document.getElementById("autoprint-text");
+        const scan_hint = document.getElementById("scan-hint");
+
+        // Whether the age in the field came from an ID scan (not typed).
+        let ageFromId = false;
+        let stoppedByStaff = false;
+        let countdown = null;
+
+        function cancelAutoPrint() {
+            clearInterval(countdown);
+            countdown = null;
+            banner.hidden = true;
+        }
+
+        function maybeAutoPrint() {
+            if (countdown || stoppedByStaff || !autoPrintEnabled()) return;
+            if (!TELEGRAM_VERIFIED || !ageFromId) return;
+            const name = document.getElementById("name").value.trim() || "this guest";
+            let remaining = AUTO_PRINT_DELAY_S;
+            const show = () => {
+                banner_text.textContent = `Printing wristband for ${name} (age ${age_element.value}) in ${remaining}…`;
+            };
+            show();
+            banner.hidden = false;
+            countdown = setInterval(() => {
+                remaining -= 1;
+                if (remaining > 0) {
+                    show();
+                    return;
+                }
+                cancelAutoPrint();
+                // requestSubmit runs the form's validation, like pressing the button.
+                form.requestSubmit(submit_btn);
+            }, 1000);
+        }
+
+        function applyIdAge(age) {
+            age_element.value = age;
+            ageFromId = true;
+            scan_hint.hidden = true;
+            scan_hint.classList.replace("alert-danger", "alert-info");
+            // Untrusted event: runs the colour logic below without marking it as typed.
+            age_element.dispatchEvent(new Event("input"));
+        }
+
+        document.getElementById("autoprint-stop").addEventListener("click", () => {
+            stoppedByStaff = true;
+            cancelAutoPrint();
+        });
+
+        document.addEventListener("autoprintchange", (e) => (e.detail ? maybeAutoPrint() : cancelAutoPrint()));
+
+        // ID scanned, but no usable date of birth: say so, never guess.
+        document.addEventListener("idscanfailed", (e) => {
+            cancelAutoPrint();
+            scan_hint.classList.replace("alert-info", "alert-danger");
+            scan_hint.textContent = e.detail.message;
+            scan_hint.hidden = false;
+        });
+
+        // ID scanned while this form is open.
+        document.addEventListener("idscanned", (e) => {
+            stoppedByStaff = false;
+            applyIdAge(e.detail.age);
+            // On a looked-up guest's form the ID is theirs: don't hold it for
+            // the next QR scan. On the blank form, keep it for the QR to come.
+            if (TELEGRAM_VERIFIED) clearPendingAge();
+            maybeAutoPrint();
+        });
+
+        form.addEventListener("submit", () => {
+            cancelAutoPrint();
+            // The held age belongs to this guest; don't let it reach the next one.
+            clearPendingAge();
+            submit_btn.disabled = true;
+        });
 
         const cancel_btn = document.getElementById("cancel-btn")
         cancel_btn.addEventListener("click", () => {
+            cancelAutoPrint();
+            clearPendingAge();
             document.location = "{{ url_for('index') }}";
         });
 
@@ -118,24 +213,38 @@
             })
         }
 
-        document.getElementById("age").addEventListener("input", (event) => {
-            const age_element = document.getElementById("age");
+        age_element.addEventListener("input", (event) => {
+            if (event.isTrusted) {
+                // Staff typed it: not from an ID, so never auto-print on it.
+                ageFromId = false;
+                cancelAutoPrint();
+            }
             let age = parseInt(age_element.value);
             if (Number.isNaN(age)) {
                 return;
             }
 
+            age_element.classList.remove('bg-warning', 'bg-danger', 'bg-success');
             if (age < 18) {
-                age_element.classList.remove('bg-warn', 'bg-danger', 'bg-success');
                 age_element.classList.add('bg-danger');
-            } else if ((age >= 18) && (age < 21)) {
-                age_element.classList.remove('bg-danger', 'bg-success');
+            } else if (age < 21) {
                 age_element.classList.add('bg-warning');
-            } else if (age >= 21) {
-                age_element.classList.remove('bg-danger');
+            } else {
                 age_element.classList.add('bg-success');
             }
         });
+
+        // Last, once the listeners above exist: an ID scanned before the
+        // Telegram QR code is picked up from the held age.
+        const pendingAge = peekPendingAge();
+        if (pendingAge !== null && !age_element.value) {
+            applyIdAge(pendingAge);
+            if (TELEGRAM_VERIFIED) clearPendingAge();
+        } else if (TELEGRAM_VERIFIED && !age_element.value) {
+            scan_hint.textContent = "Now scan the guest's ID, or type their age.";
+            scan_hint.hidden = false;
+        }
+        maybeAutoPrint();
     });
 </script>
 {% endblock %}

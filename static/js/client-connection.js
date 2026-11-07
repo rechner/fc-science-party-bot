@@ -52,22 +52,33 @@ document.addEventListener("DOMContentLoaded", (event) => {
                     window.location = "/telegram/" + username;
                 }
             } else if (payload.data_type == "aamva") {
-                let dob = payload.birthday;
                 let age = calculateAge(payload.birthday);
-                let age_element = document.getElementById("age");
-                if (age_element) {
-                    age_element.value = age;
-                    if (age > 21) {
-                        age_element.classList.remove('bg-danger');
-                        age_element.classList.add('bg-success');
-                    }
+                if (age === null) {
+                    // The AAMVA parser failed (it sends null fields) or the date
+                    // is unreadable. Never guess an age; drop any older held one
+                    // so it can't be mistaken for this guest's.
+                    console.log("ID scan has no usable birthday", payload.birthday);
+                    clearPendingAge();
+                    document.dispatchEvent(new CustomEvent("idscanfailed", {
+                        detail: { message: "Couldn't read a date of birth from that ID. Scan it again, or check the ID and type the age." },
+                    }));
+                    return;
                 }
+                // Hold the age so scanning works in either order: if the
+                // Telegram QR comes next, the enrol form picks it up on load.
+                savePendingAge(age);
+                // Tell whichever page is open (enrol form or start screen).
+                document.dispatchEvent(new CustomEvent("idscanned", { detail: { age: age } }));
             } else if (payload.data_type == "text") {
-                let jwt_text = payload.text;
-                try { 
-                    let parsed_jwt = parseJwt(jwt_text);
-                    window.location = "/jwt?token=" + jwt_text;
-                } catch {
+                // A wristband's Aztec code: a JWT the server verifies at /jwt.
+                let jwt_text = String(payload.text || "").trim();
+                if (/^[\w-]+\.[\w-]+\.[\w-]+$/.test(jwt_text)) {
+                    try {
+                        parseJwt(jwt_text);
+                        window.location = "/jwt?token=" + encodeURIComponent(jwt_text);
+                    } catch {
+                        console.log("Text scan looks like a JWT but doesn't decode");
+                    }
                 }
             }
 

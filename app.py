@@ -1,11 +1,14 @@
 import asyncio
 import os
+from datetime import datetime
 
 from quart import Quart, render_template, url_for, request, redirect, flash
-from telethon import TelegramClient, events, types
+from telethon import TelegramClient, errors, events, types
 from telethon.tl.functions.users import GetFullUserRequest
 
-from wristband import render as render_wristband
+import jwt
+
+from wristband import render as render_wristband, decode_jwt
 
 api_id = os.environ['TELEGRAM_API_ID']
 api_hash = os.environ['TELEGRAM_API_HASH']
@@ -60,25 +63,68 @@ async def download_profile_photo(user):
     # thumb=<size type> pins the download to that still size instead of the video.
     return await client.download_media(photo, file=f"static/img/{user.username}.jpg", thumb=size.type)
 
-@app.route("/telegram/<username>/json", methods=['GET'])
-async def get_user(username):
+class TelegramLookupError(Exception):
+    """A Telegram lookup failed. str(error) is a message staff can act on."""
+
+    def __init__(self, message, status=404):
+        super().__init__(message)
+        self.status = status
+
+
+async def lookup_telegram_user(username):
+    """Fetch a guest's Telegram profile, or raise TelegramLookupError."""
+    username = (username or "").strip().lstrip("@")
+    if not username:
+        raise TelegramLookupError("That QR code has no Telegram username in it.")
+    if username.startswith("+"):
+        # t.me/+... links are phone-number or private invite links, which can't be looked up.
+        raise TelegramLookupError(
+            "That QR code is a phone-number link. Ask the guest to set a Telegram username "
+            "(Settings → Username) and show the QR again, or fill in their details by hand.")
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    await client.start()
-    user = await client.get_entity(f"@{username}")
-    full = await client(GetFullUserRequest(username))
-    print(user)
-    print(full.stringify())
-    print(await download_profile_photo(user))
-    print(user)
+    try:
+        await client.start()
+        user = await client.get_entity(f"@{username}")
+        if not isinstance(user, types.User):
+            raise TelegramLookupError(f"@{username} is a Telegram channel or group, not a person.")
+        full = await client(GetFullUserRequest(user))
+    except TelegramLookupError:
+        raise
+    except (ValueError, errors.UsernameNotOccupiedError, errors.UsernameInvalidError):
+        # get_entity raises ValueError when no account has this username.
+        raise TelegramLookupError(f"Couldn't find @{username} on Telegram. Check the handle, or fill in the details by hand.")
+    except errors.FloodWaitError as err:
+        raise TelegramLookupError(
+            f"Telegram is rate-limiting lookups for {err.seconds} seconds. Fill in the details by hand for now.", 503)
+    except (errors.RPCError, ConnectionError, OSError, asyncio.TimeoutError) as err:
+        app.logger.exception("Telegram lookup for @%s failed", username)
+        raise TelegramLookupError(f"Couldn't reach Telegram ({type(err).__name__}). Fill in the details by hand.", 502)
+
+    # A missing photo shouldn't fail the lookup; the form falls back to the placeholder.
+    try:
+        photo_path = await download_profile_photo(user)
+    except Exception:
+        app.logger.exception("Profile photo download for @%s failed", username)
+        photo_path = None
+
     return {
         "id": user.id,
         "username": user.username,
         "first_name": user.first_name,
         "last_name": user.last_name,
         "bio": full.full_user.about,
-        "photo": url_for("static", filename=f"img/{user.username}.jpg")
+        "photo": url_for("static", filename=f"img/{user.username}.jpg" if photo_path else "nobody.jpg"),
     }
+
+
+@app.route("/telegram/<username>/json", methods=['GET'])
+async def get_user(username):
+    try:
+        return await lookup_telegram_user(username)
+    except TelegramLookupError as err:
+        return {"error": str(err)}, err.status
 
 AGE_NEEDED = "Enter the guest's age (or scan their ID) to print a wristband."
 
@@ -127,8 +173,16 @@ async def enrol_user():
 async def telegram_user_form(username):
     if request.method == "POST":
         return await enrol_user()
-    user = await get_user(username)
-    return await render_template("custom.html", user=user)
+    try:
+        user = await lookup_telegram_user(username)
+    except TelegramLookupError as err:
+        # Show the enrol form anyway, with the message on top, so staff can
+        # finish by hand. Auto-print stays off: there's no verified profile.
+        await flash(str(err))
+        user = {"id": "", "first_name": "", "last_name": "", "username": username.lstrip("@+")}
+        photo = url_for("static", filename="nobody.jpg")
+        return await render_template("custom.html", user=user, photo=photo, telegram_verified=False), err.status
+    return await render_template("custom.html", user=user, telegram_verified=True)
 
 async def print_wristband_form(user):
     zpl = render_wristband(name=user["name"], handle=user["username"], mrn=user["id"], pronouns=user["pronouns"],
@@ -145,27 +199,49 @@ async def print_wristband(username):
     if age is None:
         await flash(AGE_NEEDED)
         return redirect(url_for("telegram_user_form", username=username))
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    await client.start()
-    user = await client.get_entity(f"@{username}")
-    full = await client(GetFullUserRequest(username))
-    print(await download_profile_photo(user))
+    try:
+        user = await lookup_telegram_user(username)
+    except TelegramLookupError as err:
+        await flash(str(err))
+        return redirect(url_for("index"))
 
-    zpl = render_wristband(name=user.first_name, handle=user.username, mrn=user.id, age=age, icon=f"static/img/{user.username}.jpg")
+    zpl = render_wristband(name=user["first_name"], handle=user["username"], mrn=user["id"], age=age,
+                           icon=f"static/img/{user['username']}.jpg")
     with open("/tmp/wristband.zpl", "w") as f:
         f.write(zpl)
     os.system("lp -d Wristband /tmp/wristband.zpl")
     os.unlink("/tmp/wristband.zpl")
     return redirect(url_for("index"))
 
-    return {"user": {
-        "id": user.id,
-        "username": user.username,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "bio": full.full_user.about,
-    }}
+
+@app.route("/jwt", methods=['GET', 'POST'])
+async def validate_jwt():
+    """
+    Check a wristband's JWT (the Aztec code printed on the band).
+
+    Accepts the token as GET /jwt?token=<jwt>, or POST /jwt with JSON
+    {"token": ...} or a form field "token". Renders jwt.html: 200 when the
+    signature is valid, 400 when no token is supplied, 401 when it's invalid.
+    """
+    token = request.args.get("token")
+    if token is None and request.method == "POST":
+        if request.is_json:
+            body = await request.get_json(silent=True) or {}
+            token = body.get("token") if isinstance(body, dict) else None
+        else:
+            token = (await request.form).get("token")
+
+    if not token or not isinstance(token, str):
+        return await render_template("jwt.html", status="missing"), 400
+
+    try:
+        claims = decode_jwt(token.strip())
+    except jwt.InvalidTokenError:
+        # Don't echo decoder details back to the page.
+        return await render_template("jwt.html", status="invalid"), 401
+
+    issued_at = datetime.fromtimestamp(claims["iat"]).strftime("%Y-%m-%d %H:%M")
+    return await render_template("jwt.html", status="valid", claims=claims, issued_at=issued_at)
 
 
 @app.route("/")
