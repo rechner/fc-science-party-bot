@@ -2,7 +2,7 @@ import asyncio
 import os
 
 from quart import Quart, render_template, url_for, request, redirect, flash
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, types
 from telethon.tl.functions.users import GetFullUserRequest
 
 from wristband import render as render_wristband
@@ -36,6 +36,30 @@ async def get_me():
 async def get_telegram_user(username):
     return await client.get_entity(f"@{username}")
 
+
+def largest_still_size(photo):
+    """The biggest still JPEG size of a profile photo, or None.
+
+    Animated profile photos also carry video sizes, and Telethon's default
+    download picks the largest size overall, which is the MP4. Saved under a
+    .jpg name, that breaks the page preview and the wristband print.
+    """
+    stills = [s for s in photo.sizes if isinstance(s, (types.PhotoSize, types.PhotoSizeProgressive))]
+    return max(stills, key=lambda s: s.w * s.h, default=None)
+
+
+async def download_profile_photo(user):
+    """Save the user's current profile photo (still image) as static/img/<username>.jpg."""
+    profile_photos = await client.get_profile_photos(user, limit=1)
+    if not profile_photos:
+        return None
+    photo = profile_photos[0]
+    size = largest_still_size(photo)
+    if size is None:
+        return None
+    # thumb=<size type> pins the download to that still size instead of the video.
+    return await client.download_media(photo, file=f"static/img/{user.username}.jpg", thumb=size.type)
+
 @app.route("/telegram/<username>/json", methods=['GET'])
 async def get_user(username):
     loop = asyncio.new_event_loop()
@@ -45,9 +69,7 @@ async def get_user(username):
     full = await client(GetFullUserRequest(username))
     print(user)
     print(full.stringify())
-    profile_photos = await client.get_profile_photos(user, limit=1)
-    if len(profile_photos):
-        print(await client.download_media(profile_photos[0], file=f"static/img/{user.username}.jpg"))
+    print(await download_profile_photo(user))
     print(user)
     return {
         "id": user.id,
@@ -128,9 +150,7 @@ async def print_wristband(username):
     await client.start()
     user = await client.get_entity(f"@{username}")
     full = await client(GetFullUserRequest(username))
-    profile_photos = await client.get_profile_photos(user, limit=1)
-    if len(profile_photos):
-        print(await client.download_media(profile_photos[0], file=f"static/img/{user.username}.jpg"))
+    print(await download_profile_photo(user))
 
     zpl = render_wristband(name=user.first_name, handle=user.username, mrn=user.id, age=age, icon=f"static/img/{user.username}.jpg")
     with open("/tmp/wristband.zpl", "w") as f:

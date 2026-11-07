@@ -55,6 +55,21 @@ def decode_jwt(encoded_jwt):
     return jwt.decode(encoded_jwt, public_key, algorithms=["EdDSA"])
 
 
+PLACEHOLDER_ICON = "static/nobody.jpg"
+
+
+def is_image(data) -> bool:
+    """True if Pillow can read these bytes as an image."""
+    if not data:
+        return False
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.verify()
+        return True
+    except Exception:
+        return False
+
+
 def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None, icon: [str | bytes] = None, age: int = None) -> bytes:
     template = env.get_template("wristband.zpl")
     icon_zpl = ""
@@ -64,12 +79,16 @@ def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None,
                 with open(icon, 'rb') as image:
                     icon_bytes = image.read()
             except FileNotFoundError:
-                with open('static/img/nobody.jpg', 'rb') as image:
-                    icon_bytes = image.read()
+                icon_bytes = None
         elif isinstance(icon, io.IOBase):
             icon_bytes = icon.read()
         elif type(icon) is bytes:
             icon_bytes = icon
+        # A missing or unreadable photo (e.g. an animated profile video saved
+        # under a .jpg name) prints the placeholder instead of failing the band.
+        if not is_image(icon_bytes):
+            with open(PLACEHOLDER_ICON, 'rb') as image:
+                icon_bytes = image.read()
 
         box = slot_box("wristband.zpl")
         if box.get("rotate"):
