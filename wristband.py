@@ -55,7 +55,7 @@ def decode_jwt(encoded_jwt):
     return jwt.decode(encoded_jwt, public_key, algorithms=["EdDSA"])
 
 
-def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None, icon: [str | bytes] = None, age: int = 0) -> bytes:
+def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None, icon: [str | bytes] = None, age: int = None) -> bytes:
     template = env.get_template("wristband.zpl")
     icon_zpl = ""
     if icon is not None:
@@ -90,6 +90,9 @@ def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None,
             complete_zpl=False,
         ).to_zpl()
 
+    if age is None:
+        # The template picks MINOR / 18+ / 21+ from this and the JWT records it: never guess.
+        raise ValueError("render() needs the guest's age")
     over_18 = False
     over_21 = False
     if age is not None:
@@ -112,7 +115,17 @@ def render(name: str, handle: str = None, pronouns: str = None, mrn: str = None,
 
     print(decode_jwt(encoded_jwt))
 
-    return template.render(name=unidecode(name), handle=handle, pronouns=pronouns, mrn=mrn, age=age, icon_zpl=icon_zpl, encoded_jwt=encoded_jwt)
+    # Clip what prints to what fits on the band; the JWT above keeps the full name.
+    # handle and pronouns can be None: "" hides their lines in the template.
+    return template.render(
+        name=unidecode(name)[:18],
+        handle=(handle or "")[:17],
+        pronouns=(pronouns or "")[:10],
+        mrn=mrn,
+        age=age,
+        icon_zpl=icon_zpl,
+        encoded_jwt=encoded_jwt,
+    )
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import asyncio
 import os
 
-from quart import Quart, render_template, url_for, request, redirect
+from quart import Quart, render_template, url_for, request, redirect, flash
 from telethon import TelegramClient, events
 from telethon.tl.functions.users import GetFullUserRequest
 
@@ -58,15 +58,45 @@ async def get_user(username):
         "photo": url_for("static", filename=f"img/{user.username}.jpg")
     }
 
+AGE_NEEDED = "Enter the guest's age (or scan their ID) to print a wristband."
+
+
+def parse_age(value):
+    """A whole number of years, or None when it's missing or not believable.
+
+    A band never prints without one: a missing age must not quietly become a
+    MINOR band, and must never become a 21+ one.
+    """
+    try:
+        age = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return age if 0 <= age <= 120 else None
+
+
 @app.route("/enrol", methods=['POST'])
 async def enrol_user():
     form = await request.form
+    age = parse_age(form.get("age"))
+    if age is None:
+        # Back to the form with everything they typed, so only the age is left to fill in.
+        await flash(AGE_NEEDED)
+        handle = form.get("handle", "")
+        user = {
+            "id": form.get("id", ""),
+            "first_name": form.get("name", ""),
+            "last_name": "",
+            "username": handle,
+            "pronouns": form.get("pronouns", ""),
+        }
+        photo = url_for("static", filename=f"img/{handle}.jpg" if handle else "nobody.jpg")
+        return await render_template("custom.html", user=user, photo=photo), 400
     user = {
         "name" : form["name"],
         "username": form["handle"],
         "id": form["id"],
         "pronouns": form["pronouns"],
-        "age": int(form["age"]),
+        "age": age,
     }
     await print_wristband_form(user)
     return redirect(url_for("index"))
@@ -88,6 +118,11 @@ async def print_wristband_form(user):
 
 @app.route("/print/<username>", methods=['GET', 'POST'])
 async def print_wristband(username):
+    # /print/<username>?age=25. Without an age, go to the enrol form for this guest instead.
+    age = parse_age(request.args.get("age"))
+    if age is None:
+        await flash(AGE_NEEDED)
+        return redirect(url_for("telegram_user_form", username=username))
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     await client.start()
@@ -97,11 +132,12 @@ async def print_wristband(username):
     if len(profile_photos):
         print(await client.download_media(profile_photos[0], file=f"static/img/{user.username}.jpg"))
 
-    zpl = render_wristband(name=user.first_name, handle=user.username, mrn=user.id, icon=f"static/img/{user.username}.jpg")
+    zpl = render_wristband(name=user.first_name, handle=user.username, mrn=user.id, age=age, icon=f"static/img/{user.username}.jpg")
     with open("/tmp/wristband.zpl", "w") as f:
         f.write(zpl)
     os.system("lp -d Wristband /tmp/wristband.zpl")
     os.unlink("/tmp/wristband.zpl")
+    return redirect(url_for("index"))
 
     return {"user": {
         "id": user.id,
